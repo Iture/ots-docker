@@ -12,6 +12,9 @@ services:
     tty: true
     ports:
       - 127.0.0.1:8081:8081 # OTS listens on this port on the loopback interface for HTTP(S) requests
+    networks:
+      - external  # API exposed through nginx proxy
+      - internal  # Database and RabbitMQ access
     environment:
       DOCKER_SQLALCHEMY_DATABASE_URI: "postgresql+psycopg://ots:${POSTGRESQL_PASSWORD:-POSTGRESQL_PASSWORD}@ots-db/ots"
     volumes:
@@ -36,6 +39,8 @@ services:
     pull_policy: never
     tty: true
     command: python3 /app/.opentakserver_venv/bin/cot_parser
+    networks:
+      - internal  # RabbitMQ access only
     healthcheck:
       disable: true
     volumes:
@@ -50,6 +55,9 @@ services:
     container_name: ots-eud_handler
     hostname: ots-eud_handler
     command: python3 /app/.opentakserver_venv/bin/eud_handler --no-ssl
+    networks:
+      - external  # CoT clients from internet
+      - internal  # RabbitMQ access
     ports:
       - 0.0.0.0:8088:8088 # TCP CoT streaming port
 
@@ -58,6 +66,9 @@ services:
     container_name: ots-eud_handler-ssl
     hostname: ots-eud_handler-ssl
     command: python3 /app/.opentakserver_venv/bin/eud_handler --ssl
+    networks:
+      - external  # CoT clients from internet (SSL)
+      - internal  # RabbitMQ access
     ports:
       - 0.0.0.0:8089:8089 # SSL CoT streaming port
 
@@ -75,6 +86,9 @@ services:
     container_name: nginx-proxy
     hostname: nginx-proxy
     restart: unless-stopped
+    networks:
+      - external  # Internet-facing reverse proxy
+      - internal  # Routes to OTS, WebUI, RabbitMQ MQTT
     ports:
       - 0.0.0.0:80:80 # HTTP Web UI
       - 0.0.0.0:443:443 # HTTPS Web UI
@@ -97,6 +111,8 @@ services:
     container_name: ots-webui
     hostname: opentakserver-webui
     restart: unless-stopped
+    networks:
+      - internal  # Only accessible through nginx proxy
 
 # ****************************************
 # OpenTakServer - Database services
@@ -112,6 +128,8 @@ services:
     container_name: ots-db
     hostname: ots-db
     restart: unless-stopped
+    networks:
+      - internal  # Internal network only (NOT exposed to external)
     environment:
       POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:-POSTGRESQL_PASSWORD}
       POSTGRES_USER: ots
@@ -130,6 +148,8 @@ services:
     container_name: rabbitmq
     hostname: rabbitmq
     restart: unless-stopped
+    networks:
+      - internal  # Internal network only (NOT exposed to external)
     volumes:
       # RabbitMQ plugins configuration (read-only)
       - "${RABBITMQ_CONFIG_PATH:-./persistent/rabbitmq}/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro"
@@ -151,6 +171,9 @@ services:
     container_name: mediamtx
     hostname: mediamtx
     restart: unless-stopped
+    networks:
+      - external  # Video streams from internet
+      - internal  # OTS API access
 #    network_mode: host
     ports:
       - 0.0.0.0:1935:1935 # RTMP video streams
@@ -172,3 +195,27 @@ services:
     depends_on:
       ots:
         condition: service_healthy
+
+# ****************************************
+# Docker Networks - Optional Segmentation
+# ****************************************
+# Default: All services on Docker default bridge (no segmentation)
+# Segmented (opt-in via NETWORK_SECURITY_MODE=segmented):
+#   - external: Services exposed to internet (nginx, CoT handlers, MediaMTX)
+#   - internal: Application services + database + broker (protected)
+#
+# Conditional network definition (handled by compose variable expansion)
+networks:
+  external:
+    driver: bridge
+    internal: false  # Can reach internet
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+  internal:
+    driver: bridge
+    internal: false  # Needs internet for plugins, updates
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24

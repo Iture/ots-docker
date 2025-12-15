@@ -1,0 +1,64 @@
+---
+# =============================================================================
+# Docker Compose Development Override Configuration
+# =============================================================================
+#
+# This file overrides the main compose.yaml with development-specific settings.
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d
+#
+# Effects:
+# - Exposes database and RabbitMQ debug ports on 0.0.0.0 (all interfaces)
+# - Enables debug mode for OTS server
+# - Uses RabbitMQ management image with management UI
+# - Allows local tools (pgAdmin, DBeaver, mosquitto, etc.) to access services
+#
+# WARNING: These settings are for development/debugging only!
+# Do NOT use in production - use compose.yaml alone for production deployments.
+#
+
+services:
+  # ========================================
+  # OTS - Enable debug mode
+  # ========================================
+  ots:
+    environment:
+      DOCKER_DEBUG: "True"
+
+  # ========================================
+  # PostgreSQL - Expose debug port
+  # ========================================
+  ots-db:
+    ports:
+      # PostgreSQL on all interfaces (0.0.0.0) for development
+      # Access with: psql -h 192.168.1.100 -U ots -d ots
+      - "0.0.0.0:5432:5432"
+
+  # ========================================
+  # RabbitMQ - Expose debug ports
+  # ========================================
+  rabbitmq:
+    # Use RabbitMQ image with management plugin
+    image: rabbitmq:${RABBITMQ_IMAGE_TAG:-latest}-management
+
+    ports:
+      # AMQP - RabbitMQ main protocol
+      # Access with: amqp://guest:guest@192.168.1.100:5672/
+      - "0.0.0.0:5672:5672"
+
+      # MQTT - MQTT broker protocol
+      # Access with: mosquitto_pub -h 192.168.1.100 -p 1883 -t test/topic -m "hello"
+      - "0.0.0.0:1883:1883"
+
+      # Management UI - Web dashboard
+      # Access with: http://192.168.1.100:15672/
+      # Default credentials: guest / guest
+      - "0.0.0.0:15672:15672"
+
+# =============================================================================
+# Network Configuration for Development
+# =============================================================================
+# NOTE: This file does NOT override network configuration.
+# The networks are defined in compose.yaml with both external and internal.
+# This allows services to communicate properly during development.

@@ -67,6 +67,16 @@ services:
 # Uncomment mediamtx service from compose.yaml via Docker Compose profiles:
 # docker-compose --profile mediamtx up -d
 
+# Pattern 4: Network security (v3.0+)
+# Enable network segmentation for production deployments
+# environment:
+#   NETWORK_SECURITY_MODE: segmented
+#   MEDIAMTX_PORT_MODE: minimal
+
+# Pattern 5: Development with network segmentation and debug ports
+# docker-compose -f compose.yaml -f compose.dev.yaml up -d
+# This exposes debug ports (5432, 5672, 1883, 15672) on 0.0.0.0
+
 # =============================================================================
 # NOTES
 # =============================================================================

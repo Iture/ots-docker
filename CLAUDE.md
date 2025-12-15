@@ -266,6 +266,136 @@ Upgrading from v1.x? See [MIGRATION.md](./MIGRATION.md) for detailed migration s
 
 **Short version**: Your existing deployment continues to work unchanged. `.env` is optional.
 
+## Network Security
+
+### Network Segmentation (Optional)
+
+Version 3.0 introduces optional two-tier network isolation to enhance security by separating internet-facing services from internal database and message broker.
+
+#### Network Modes
+
+**Default Mode** (current behavior - backward compatible):
+- All services on Docker's default bridge network
+- No network isolation
+- Simpler configuration, suitable for development/testing
+- Enable: `NETWORK_SECURITY_MODE=default` (or omit the variable)
+
+**Segmented Mode** (enhanced security for production):
+- Two isolated networks: `external` and `internal`
+- External network: nginx proxy, CoT handlers, MediaMTX video
+- Internal network: OTS server, PostgreSQL, RabbitMQ, WebUI (protected)
+- Database and broker inaccessible from internet directly
+- Enable: `NETWORK_SECURITY_MODE=segmented`
+
+#### Network Topology
+
+```
+INTERNET
+   │
+   ├─── Port 80,443 ──→ nginx-proxy ──→ WebUI (internal)
+   ├─── Port 8080,8443 ─→ nginx-proxy ──→ OTS API (internal)
+   ├─── Port 8088 ──→ ots-eud_handler ──→ RabbitMQ (internal)
+   ├─── Port 8089 ──→ ots-eud_handler-ssl ──→ RabbitMQ (internal)
+   └─── Port 8883 ──→ nginx-proxy (MQTT proxy) ──→ RabbitMQ (internal)
+
+EXTERNAL NETWORK (172.20.0.0/24):
+   - nginx-proxy (both external + internal)
+   - ots-eud_handler (both external + internal)
+   - ots-eud_handler-ssl (both external + internal)
+   - mediamtx (both external + internal - video)
+
+INTERNAL NETWORK (172.21.0.0/24):
+   - ots (main server - both external + internal)
+   - ots-cot_parser (message parser)
+   - ots-webui (WebUI - proxied via nginx)
+   - ots-db (PostgreSQL database) ← PROTECTED
+   - rabbitmq (message broker) ← PROTECTED
+
+DEBUG PORTS (optional, development only):
+   - 5432 → PostgreSQL (pgAdmin, DBeaver, psql)
+   - 5672 → RabbitMQ AMQP (testing)
+   - 1883 → RabbitMQ MQTT (mosquitto)
+   - 15672 → RabbitMQ Management UI (monitoring)
+```
+
+#### Enabling Network Segmentation
+
+**Option 1: Via `.env` file**
+```bash
+# .env
+NETWORK_SECURITY_MODE=segmented
+```
+
+**Option 2: Inline**
+```bash
+NETWORK_SECURITY_MODE=segmented docker compose up -d
+```
+
+**Restart services**:
+```bash
+make down && make up
+```
+
+#### Database and Broker Access
+
+**Production (segmented mode)**:
+- PostgreSQL: Only accessible from `ots` service (internal network)
+- RabbitMQ: Only accessible from OTS and CoT handlers (internal network)
+- MQTT: Exposed on port 8883 through nginx proxy (only to authenticated clients)
+
+**Development (debug ports via compose.dev.yaml)**:
+```bash
+# Start with debug ports exposed on 0.0.0.0
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+
+# Now accessible from anywhere on your network:
+psql -h 192.168.1.100 -U ots -d ots        # PostgreSQL
+mosquitto_pub -h 192.168.1.100 -p 1883 -t test -m "hello"  # MQTT
+curl http://192.168.1.100:15672            # RabbitMQ UI
+```
+
+**Warning**: Debug ports expose services on all interfaces (0.0.0.0). Use only in development, not in production!
+
+#### Verifying Network Isolation
+
+```bash
+# Check if networks are created (segmented mode)
+docker network ls | grep ots
+
+# Verify database is ONLY in internal network
+docker network inspect ots-docker_external | grep ots-db
+# Should return: (empty) - db is NOT in external network
+
+# Verify nginx can reach internal services
+docker exec nginx-proxy nc -zv ots 8081
+# Should return: Connection succeeded
+```
+
+#### Security Benefits
+
+| Scenario | Default Mode | Segmented Mode |
+|----------|--------------|----------------|
+| Internet exploit targets PostgreSQL | ✗ Accessible | ✓ Blocked (internal only) |
+| Compromised CoT handler | ✗ Can access DB | ✓ Can access DB (intended) |
+| Compromised WebUI | ✗ Can access anything | ✓ Can access anything (frontend) |
+| Lateral movement | ✗ No boundaries | ✓ Network boundaries exist |
+| Debug port exposure | ✗ Not available | ✓ Development only (opt-in) |
+
+#### MediaMTX Port Mode
+
+**Minimal mode** (recommended - production):
+```bash
+MEDIAMTX_PORT_MODE=minimal
+# Exposes only: 8554 (RTSP), 8888 (HLS)
+```
+
+**Full mode** (all protocols):
+```bash
+MEDIAMTX_PORT_MODE=full
+# Exposes: 1935 (RTMP), 1936 (RTMPS), 8000 (RTP), 8001 (RTCP),
+#          8322 (RTSPS), 8554 (RTSP), 8888 (HLS), 8890 (SRT)
+```
+
 ## Development Workflow
 
 ### Getting Started

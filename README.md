@@ -52,6 +52,62 @@ You can overwrite all settings this way so watch out!!!
 
 It's also possible to just change them in the `persistent/ots/config.yml` file
 
+## Security Considerations
+
+### Network Isolation (Optional)
+
+Starting from version 3.0, you can enable network segmentation to improve security:
+
+```bash
+# .env
+NETWORK_SECURITY_MODE=segmented
+```
+
+This separates internet-facing services from the database and message broker, providing an additional security layer.
+
+For detailed configuration and testing guide, see [Network Security in CLAUDE.md](./CLAUDE.md#network-security).
+
+### Required Ports for TAK Clients
+
+The following ports must be open in your firewall for TAK clients to connect:
+
+```bash
+# Essential TAK ports
+ufw allow 80/tcp        # HTTP WebUI
+ufw allow 443/tcp       # HTTPS WebUI
+ufw allow 8080/tcp      # TAK API (HTTP)
+ufw allow 8443/tcp      # TAK API (HTTPS + mTLS)
+ufw allow 8446/tcp      # Certificate enrollment
+ufw allow 8088/tcp      # CoT streaming (TCP)
+ufw allow 8089/tcp      # CoT streaming (SSL/TLS)
+ufw allow 8883/tcp      # MQTT / Meshtastic
+
+# Optional: Video streaming (if using MediaMTX)
+ufw allow 8554/tcp      # RTSP video
+ufw allow 8888/tcp      # HLS video streaming
+
+# Restrict everything else
+ufw default deny incoming
+ufw enable
+```
+
+### Development Debug Ports
+
+For development and debugging, you can expose database and message broker ports:
+
+```bash
+# Use the development override
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+
+# Now accessible from your network:
+# PostgreSQL: 5432 (pgAdmin, DBeaver, psql)
+# RabbitMQ AMQP: 5672 (message queue testing)
+# RabbitMQ MQTT: 1883 (mosquitto_pub/sub)
+# RabbitMQ Management UI: 15672 (monitoring dashboard)
+```
+
+**WARNING**: These ports expose services on all network interfaces. Use only in development, never in production!
+
 ## Whats supported for now
  - [x] Tak server
  - [x] Rabbitmq 
