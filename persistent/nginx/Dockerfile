@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM nginx:mainline-bookworm
+ARG NGINX_BASE_IMAGE_TAG=mainline-bookworm
+FROM nginx:${NGINX_BASE_IMAGE_TAG}
 
 # Copy nginx settings
 COPY --chmod=0755 ./persistent/nginx/docker-entrypoint.d/10-default-ots.envsh /docker-entrypoint.d

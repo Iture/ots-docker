@@ -151,6 +151,121 @@ cp compose.override.yaml-example compose.override.yaml
 
 The OTS container runs as this user to ensure file permissions align with your system.
 
+### Environment-Based Configuration (New in v2.0)
+
+**All configuration is now manageable via environment variables** - no need to manually edit config files!
+
+#### Quick Start
+
+```bash
+# Copy the environment template
+cp .env.example .env
+
+# Edit with your preferences
+nano .env
+
+# Start with custom configuration
+make up
+```
+
+#### Configuration Priority
+
+Docker Compose reads configuration in this order (later overrides earlier):
+
+1. **Defaults in compose.yaml** (e.g., `${VAR:-default}`)
+2. **.env file** (automatically loaded)
+3. **compose.override.yaml** (service-specific overrides)
+4. **Shell environment** (highest priority)
+
+#### Image Version Management
+
+Pin specific container versions to prevent unexpected updates:
+
+```bash
+# .env
+OTS_IMAGE_TAG=v1.7.0
+OTS_WEBUI_IMAGE_TAG=v1.5.0
+RABBITMQ_IMAGE_TAG=3.13-management
+MEDIAMTX_IMAGE_TAG=1.13.0-ffmpeg
+```
+
+Verify pinned versions:
+```bash
+docker-compose ps --format "table {{.Service}}\t{{.Image}}"
+```
+
+#### Data Location Configuration
+
+Move persistent data to dedicated storage (SSD, NAS, etc.):
+
+```bash
+# .env
+DB_DATA_PATH=/mnt/fast-ssd/ots-database
+OTS_DATA_PATH=/opt/opentakserver/data
+RABBITMQ_CONFIG_PATH=/opt/rabbitmq-config
+```
+
+Create directories before first start:
+```bash
+mkdir -p /mnt/fast-ssd/ots-database /opt/opentakserver/data
+```
+
+#### OTS Configuration Parameters
+
+All 100+ OpenTAKServer parameters are available via environment variables with the `DOCKER_` prefix:
+
+```bash
+# .env
+DOCKER_OTS_CA_NAME=MyOrganization-CA
+DOCKER_OTS_CA_PASSWORD=secure-password
+DOCKER_OTS_LISTENER_PORT=8081
+DOCKER_OTS_MEDIAMTX_ENABLE=True
+DOCKER_OTS_ENABLE_PLUGINS=True
+DOCKER_OTS_ENABLE_EMAIL=False
+DOCKER_OTS_ENABLE_LDAP=False
+```
+
+**Available parameters** (organized by category):
+- **Network & Ports**: `OTS_LISTENER_*`, `OTS_MARTI_*`, `OTS_TCP_STREAMING_*`, `OTS_SSL_STREAMING_*`
+- **Security**: `OTS_SSL_*`, `OTS_CA_*`, `SECRET_KEY`, `DEBUG`
+- **RabbitMQ**: `OTS_RABBITMQ_*`
+- **MediaMTX**: `OTS_MEDIAMTX_*`
+- **Email**: `OTS_ENABLE_EMAIL`, `MAIL_*`, `OTS_EMAIL_*`
+- **LDAP**: `OTS_ENABLE_LDAP`, `LDAP_*`, `OTS_LDAP_*`
+- **ADS-B**: `OTS_AIRPLANES_*`, `OTS_ADSB_*`
+- **AIS**: `OTS_AISHUB_*`, `OTS_AIS_*`
+- **Meshtastic**: `OTS_ENABLE_MESHTASTIC`, `OTS_MESHTASTIC_*`
+- **Plugins**: `OTS_ENABLE_PLUGINS`, `OTS_PLUGIN_*`
+
+See `.env.example` for complete list with descriptions.
+
+#### Environment Variable Examples
+
+```bash
+# Production: Pinned versions, external database, security hardening
+OTS_IMAGE_TAG=v1.7.0
+DB_DATA_PATH=/mnt/ssd/ots-db
+POSTGRESQL_PASSWORD=secure-password-here
+DOCKER_OTS_CA_NAME=YourOrganization-CA
+DOCKER_DEBUG=False
+
+# Development: Latest versions, debug enabled
+OTS_IMAGE_TAG=latest
+DOCKER_DEBUG=True
+DOCKER_OTS_MEDIAMTX_ENABLE=False
+
+# With LDAP: Directory-based authentication
+DOCKER_OTS_ENABLE_LDAP=True
+DOCKER_LDAP_HOST=ldap.example.com
+DOCKER_LDAP_BASE_DN=dc=example,dc=com
+```
+
+#### Migration from Previous Versions
+
+Upgrading from v1.x? See [MIGRATION.md](./MIGRATION.md) for detailed migration steps.
+
+**Short version**: Your existing deployment continues to work unchanged. `.env` is optional.
+
 ## Development Workflow
 
 ### Getting Started

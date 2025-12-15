@@ -1,7 +1,7 @@
 ---
 services:
   traefik-proxy:
-    image: traefik:v3.5
+    image: traefik:${TRAEFIK_IMAGE_TAG:-v3.5}
     container_name: traefik-proxy
     hostname: traefik-proxy
     restart: unless-stopped
@@ -21,8 +21,10 @@ services:
       - 0.0.0.0:8883:8883 # Proxy for MQTT / Meshtastic to Rabbitmq port 1883
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./persistent/ots/ca:/app/ots/ca:ro"
-      - "./persistent/traefik:/etc/traefik/"
+      # OTS CA certificates (read-only)
+      - "${OTS_CA_PATH:-./persistent/ots/ca}:/app/ots/ca:ro"
+      # Traefik configuration (read-only)
+      - "${TRAEFIK_CONFIG_PATH:-./persistent/traefik}:/etc/traefik/"
     healthcheck:
       test: traefik healthcheck --ping
       interval: 30s
@@ -33,7 +35,7 @@ services:
         condition: service_healthy
 
   ots:
-    image: ghcr.io/milsimdk/ots-docker-image:latest
+    image: ghcr.io/milsimdk/ots-docker-image:${OTS_IMAGE_TAG:-latest}
     container_name: ots
     hostname: ots
     restart: unless-stopped
@@ -73,13 +75,14 @@ services:
       - "traefik.http.services.otssecure.loadbalancer.serversTransport=opentakserver@file"
 
     volumes:
-      - "./persistent/ots:/app/ots"
+      # OTS application data
+      - "${OTS_DATA_PATH:-./persistent/ots}:/app/ots"
     depends_on:
       ots-rabbitmq:
         condition: service_healthy
 
   ots-cot_parser:
-    image: ghcr.io/milsimdk/ots-docker-image:latest
+    image: ghcr.io/milsimdk/ots-docker-image:${OTS_IMAGE_TAG:-latest}
     container_name: ots-cot_parser
     hostname: ots-cot_parser
     restart: unless-stopped
@@ -88,13 +91,14 @@ services:
     healthcheck:
       test: ["CMD", "python3",  "-c", "import psutil; print(psutil.pid_exists(1))"]
     volumes:
-      - "./persistent/ots:/app/ots"
+      # OTS data shared with cot_parser
+      - "${OTS_DATA_PATH:-./persistent/ots}:/app/ots"
     depends_on:
       ots:
         condition: service_healthy
 
   ots-eud_handler:
-    image: ghcr.io/milsimdk/ots-docker-image:latest
+    image: ghcr.io/milsimdk/ots-docker-image:${OTS_IMAGE_TAG:-latest}
     container_name: ots-eud_handler
     hostname: ots-eud_handler
     restart: unless-stopped
@@ -119,13 +123,14 @@ services:
       - "traefik.tcp.routers.ots-takstreamingsecure.service=takstreamingsecure"
       - "traefik.tcp.services.takstreamingsecure.loadbalancer.server.port=8088"
     volumes:
-      - "./persistent/ots:/app/ots"
+      # OTS data shared with eud_handler
+      - "${OTS_DATA_PATH:-./persistent/ots}:/app/ots"
     depends_on:
       ots:
         condition: service_healthy
 
   ots-webui:
-    image: ghcr.io/milsimdk/ots-ui-docker-image:latest
+    image: ghcr.io/milsimdk/ots-ui-docker-image:${OTS_WEBUI_IMAGE_TAG:-latest}
     container_name: ots-webui
     hostname: ots-webui
     restart: unless-stopped
@@ -135,7 +140,7 @@ services:
       - "traefik.http.routers.ots-webui.entrypoints=websecure, web"
 
   ots-rabbitmq:
-    image: rabbitmq:latest
+    image: rabbitmq:${RABBITMQ_IMAGE_TAG:-latest}
     container_name: ots-rabbitmq
     hostname: rabbitmq
     restart: unless-stopped
@@ -148,8 +153,10 @@ services:
       - "traefik.tcp.services.rabbitmq.loadbalancer.server.port=1883"
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
-      - "./persistent/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro"
-      - "./persistent/rabbitmq/99-opentakserver.conf:/etc/rabbitmq/conf.d/99-opentakserver.conf:ro"
+      # RabbitMQ plugins configuration (read-only)
+      - "${RABBITMQ_CONFIG_PATH:-./persistent/rabbitmq}/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro"
+      # RabbitMQ OTS-specific configuration (read-only)
+      - "${RABBITMQ_CONFIG_PATH:-./persistent/rabbitmq}/99-opentakserver.conf:/etc/rabbitmq/conf.d/99-opentakserver.conf:ro"
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 30s

@@ -1,4 +1,5 @@
-FROM postgres:18-trixie
+ARG POSTGRES_BASE_IMAGE_TAG=18-trixie
+FROM postgres:${POSTGRES_BASE_IMAGE_TAG}
 
 LABEL maintainer="PostGIS Project - https://postgis.net" \
     org.opencontainers.image.description="PostGIS 3.6.1+dfsg-1.pgdg13+1 spatial database extension with PostgreSQL 18 trixie" \

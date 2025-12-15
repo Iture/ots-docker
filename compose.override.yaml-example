@@ -1,16 +1,78 @@
 ---
+# Docker Compose Local Development Overrides
+# Copy this file to compose.override.yaml and customize for your environment
+# This file is automatically loaded by docker-compose and merged with compose.yaml
+# It is safe to commit to version control (marked as .override.yaml-example)
+
 services:
-  opentakserver:
+  # Main OTS service configuration
+  ots:
+    # Set user/group IDs to match your system (run "id" to find yours)
+    # This prevents permission issues when accessing mounted volumes
     user: "${UID:-1000}:${GID:-1000}"
+
     environment:
-#      - DOCKER_OTS_MEDIAMTX_ENABLE=False
+      # Example: Disable MediaMTX if not using video streaming
+      # - DOCKER_OTS_MEDIAMTX_ENABLE=False
 
-#  nginx-proxy:
-#    environment:
-#      - OTS_ADDRESS=opentakserver:8081
-#      - OTS_WEBUI_ADDRESS=opentakserver-webui
-#      - CLIENT_MAX_BODY_SIZE=512M
+      # Example: Enable debug mode for development (NEVER in production!)
+      # - DOCKER_DEBUG=True
 
-#  rabbitmq:
-#    volumes:
-#      - "./persistent/rabbitmq/data:/var/lib/rabbitmq/:rw"
+      # Example: Custom CA name for your organization
+      # - DOCKER_OTS_CA_NAME=MyOrganization-CA
+
+      # Example: Custom CA password (CHANGE IN PRODUCTION!)
+      # - DOCKER_OTS_CA_PASSWORD=development-password
+
+  # PostgreSQL database configuration
+  ots-db:
+    # Example: Use external SSD for faster database performance
+    # volumes:
+    #   - "${DB_DATA_PATH:-/mnt/fast-ssd/ots-database}:/var/lib/postgresql"
+
+  # RabbitMQ message broker configuration
+  rabbitmq:
+    # Example: Enable RabbitMQ data persistence across restarts
+    # volumes:
+    #   - "${RABBITMQ_DATA_PATH:-./persistent/rabbitmq/data}:/var/lib/rabbitmq/:rw"
+
+  # Nginx proxy configuration (if using compose.yaml)
+  # nginx-proxy:
+  #   environment:
+  #     # Custom upload size limit
+  #     - CLIENT_MAX_BODY_SIZE=512M
+  #     # OTS server address (default: opentakserver:8081)
+  #     - OTS_ADDRESS=opentakserver:8081
+  #     # OTS WebUI address (default: opentakserver-webui)
+  #     - OTS_WEBUI_ADDRESS=opentakserver-webui
+
+# =============================================================================
+# COMMON OVERRIDE PATTERNS
+# =============================================================================
+
+# Pattern 1: Development with custom data locations
+# Uncomment and adjust paths for your development environment
+# volumes:
+#   ots:
+#     volumes:
+#       - "${OTS_DATA_PATH:-./my-dev-data/ots}:/app/ots"
+#   ots-db:
+#     volumes:
+#       - "${DB_DATA_PATH:-./my-dev-data/db}:/var/lib/postgresql"
+
+# Pattern 2: Staging environment with version pinning via .env
+# (No changes needed here - use .env file instead)
+
+# Pattern 3: Enable optional services (MediaMTX)
+# Uncomment mediamtx service from compose.yaml via Docker Compose profiles:
+# docker-compose --profile mediamtx up -d
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# - Copy this file to compose.override.yaml (without -example suffix)
+# - Values in this file override compose.yaml settings
+# - Use .env file for version pinning and path configuration
+# - Both .env and compose.override.yaml are in .gitignore
+# - For per-environment configs: use multiple override files with -f flag
+#   Example: docker-compose -f compose.yaml -f compose.prod.yaml up -d
